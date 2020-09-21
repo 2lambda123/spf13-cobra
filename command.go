@@ -31,6 +31,30 @@ import (
 // FParseErrWhitelist configures Flag parse errors to be ignored
 type FParseErrWhitelist flag.ParseErrorsWhitelist
 
+// TerminalColor is a type used for the names of the different
+// colors in the terminal
+type TerminalColor int
+
+// Colors represents the different colors one can use in the terminal
+const (
+	ColorBlack TerminalColor = iota + 30
+	ColorRed
+	ColorGreen
+	ColorYellow
+	ColorBlue
+	ColorMagenta
+	ColorCyan
+	ColorLightGray
+	ColorDarkGray
+	ColorLightRed
+	ColorLightGreen
+	ColorLightYellow
+	ColorLightBlue
+	ColorLightMagenta
+	ColorLightCyan
+	ColorWhite
+)
+
 // Command is just that, a command for your application.
 // E.g.  'go run ...' - 'run' is the command. Cobra requires
 // you to define the usage and description as part of your command
@@ -46,6 +70,9 @@ type Command struct {
 	//       optional, they are enclosed in brackets ([ ]).
 	// Example: add [-F file | -D dir]... [-f format] profile
 	Use string
+
+	// Color represents the color to use to print the command in the terminal
+	Color TerminalColor
 
 	// Aliases is an array of aliases that can be used instead of the first word in Use.
 	Aliases []string
@@ -493,7 +520,7 @@ Examples:
 {{.Example}}{{end}}{{if .HasAvailableSubCommands}}
 
 Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+  {{rpad .ColoredName .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
@@ -1291,6 +1318,14 @@ func (c *Command) Name() string {
 		name = name[:i]
 	}
 	return name
+}
+
+// ColoredName returns the command's Name in the correct color if specified
+func (c *Command) ColoredName() string {
+	if c.Color != 0 {
+		return fmt.Sprintf("\033[%dm%s\033[0m", c.Color, c.Name())
+	}
+	return c.Name()
 }
 
 // HasAlias determines if a given string is an alias of the command.
