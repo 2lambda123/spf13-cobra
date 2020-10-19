@@ -2001,6 +2001,9 @@ func TestColoredName(t *testing.T) {
 	if c.Name() != c.ColoredName() {
 		t.Error("Name and ColoredName should give the same result")
 	}
+	if c.additionalNamePadding() != 0 {
+		t.Error("With no color, the additionalNamePadding should be 0")
+	}
 	c = &Command{
 		Use:   "cmd",
 		Color: ColorRed,
@@ -2014,5 +2017,8 @@ func TestColoredName(t *testing.T) {
 	}
 	if c.ColoredName() != "\033[31m"+c.Name()+"\033[0m" {
 		t.Error("ColoredName should only add color to the name")
+	}
+	if c.additionalNamePadding() == 0 {
+		t.Error("With a color, the additionalNamePadding should be more than 0")
 	}
 }
