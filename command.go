@@ -49,7 +49,7 @@ const (
 
 // This sequence starts at 90, so we reset iota
 const (
-	ColorDarkGray = iota + 90
+	ColorDarkGray TerminalColor = iota + 90
 	ColorLightRed
 	ColorLightGreen
 	ColorLightYellow
