@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/leonelquinteros/gotext"
 	"io"
 	"os"
 	"path/filepath"
@@ -42,6 +43,12 @@ type FParseErrWhitelist flag.ParseErrorsWhitelist
 type Group struct {
 	ID    string
 	Title string
+}
+
+// CommandUsageTemplateData is the data passed to the template of command usage
+type CommandUsageTemplateData struct {
+	*Command
+	I18n *i18nCommandGlossary
 }
 
 // Command is just that, a command for your application.
@@ -432,7 +439,11 @@ func (c *Command) UsageFunc() (f func(*Command) error) {
 	}
 	return func(c *Command) error {
 		c.mergePersistentFlags()
-		err := tmpl(c.OutOrStderr(), c.UsageTemplate(), c)
+		data := CommandUsageTemplateData{
+			Command: c,
+			I18n:    getCommandGlossary(),
+		}
+		err := tmpl(c.OutOrStderr(), c.UsageTemplate(), data)
 		if err != nil {
 			c.PrintErrln(err)
 		}
@@ -549,35 +560,35 @@ func (c *Command) UsageTemplate() string {
 	if c.HasParent() {
 		return c.parent.UsageTemplate()
 	}
-	return `Usage:{{if .Runnable}}
+	return `{{.I18n.SectionUsage}}:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
   {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
 
-Aliases:
+{{.I18n.SectionAliases}}:
   {{.NameAndAliases}}{{end}}{{if .HasExample}}
 
-Examples:
+{{.I18n.SectionExamples}}:
 {{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
 
-Available Commands:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+{{.I18n.SectionAvailableCommands}}:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
 
 {{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
 
-Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
+{{.I18n.SectionAdditionalCommands}}:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
-Flags:
+{{.I18n.SectionFlags}}:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
-Global Flags:
+{{.I18n.SectionGlobalFlags}}:
 {{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
 
-Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+{{.I18n.SectionAdditionalHelpTopics}}:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
 
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+{{.I18n.Use}} "{{.CommandPath}} [command] --help" {{.I18n.ForInfoAboutCommand}}.{{end}}
 `
 }
 
@@ -756,7 +767,7 @@ func (c *Command) findSuggestions(arg string) string {
 	}
 	var sb strings.Builder
 	if suggestions := c.SuggestionsFor(arg); len(suggestions) > 0 {
-		sb.WriteString("\n\nDid you mean this?\n")
+		sb.WriteString("\n\n" + gotext.Get("DidYouMeanThis") + "\n")
 		for _, s := range suggestions {
 			_, _ = fmt.Fprintf(&sb, "\t%v\n", s)
 		}
@@ -877,7 +888,7 @@ func (c *Command) execute(a []string) (err error) {
 	}
 
 	if len(c.Deprecated) > 0 {
-		c.Printf("Command %q is deprecated, %s\n", c.Name(), c.Deprecated)
+		c.Printf(gotext.Get("CommandDeprecatedWarning")+"\n", c.Name(), c.Deprecated)
 	}
 
 	// initialize help and version flag at the last point possible to allow for user
@@ -1096,7 +1107,7 @@ func (c *Command) ExecuteC() (cmd *Command, err error) {
 		}
 		if !c.SilenceErrors {
 			c.PrintErrln(c.ErrPrefix(), err.Error())
-			c.PrintErrf("Run '%v --help' for usage.\n", c.CommandPath())
+			c.PrintErrf(gotext.Get("RunHelpTip")+"\n", c.CommandPath())
 		}
 		return c, err
 	}
@@ -1162,7 +1173,7 @@ func (c *Command) ValidateRequiredFlags() error {
 	})
 
 	if len(missingFlagNames) > 0 {
-		return fmt.Errorf(`required flag(s) "%s" not set`, strings.Join(missingFlagNames, `", "`))
+		return fmt.Errorf(gotext.GetN("FlagNotSetError", "FlagNotSetErrorPlural", len(missingFlagNames)), strings.Join(missingFlagNames, `", "`))
 	}
 	return nil
 }
@@ -1186,9 +1197,9 @@ func (c *Command) checkCommandGroups() {
 func (c *Command) InitDefaultHelpFlag() {
 	c.mergePersistentFlags()
 	if c.Flags().Lookup("help") == nil {
-		usage := "help for "
+		usage := gotext.Get("HelpFor") + " "
 		if c.Name() == "" {
-			usage += "this command"
+			usage += gotext.Get("ThisCommand")
 		} else {
 			usage += c.Name()
 		}
@@ -1208,9 +1219,9 @@ func (c *Command) InitDefaultVersionFlag() {
 
 	c.mergePersistentFlags()
 	if c.Flags().Lookup("version") == nil {
-		usage := "version for "
+		usage := gotext.Get("VersionFor") + " "
 		if c.Name() == "" {
-			usage += "this command"
+			usage += gotext.Get("ThisCommand")
 		} else {
 			usage += c.Name()
 		}
@@ -1233,10 +1244,9 @@ func (c *Command) InitDefaultHelpCmd() {
 
 	if c.helpCommand == nil {
 		c.helpCommand = &Command{
-			Use:   "help [command]",
-			Short: "Help about any command",
-			Long: `Help provides help for any command in the application.
-Simply type ` + c.Name() + ` help [path to command] for full details.`,
+			Use:   fmt.Sprintf("help [%s]", gotext.Get("command")),
+			Short: gotext.Get("CommandHelpShort"),
+			Long:  fmt.Sprintf(gotext.Get("CommandHelpLong"), c.Name()+fmt.Sprintf(" help [%s]", gotext.Get("command"))),
 			ValidArgsFunction: func(c *Command, args []string, toComplete string) ([]string, ShellCompDirective) {
 				var completions []string
 				cmd, _, e := c.Root().Find(args)
@@ -1259,7 +1269,7 @@ Simply type ` + c.Name() + ` help [path to command] for full details.`,
 			Run: func(c *Command, args []string) {
 				cmd, _, e := c.Root().Find(args)
 				if cmd == nil || e != nil {
-					c.Printf("Unknown help topic %#q\n", args)
+					c.Printf(gotext.Get("CommandHelpUnknownTopicError")+"\n", args)
 					CheckErr(c.Root().Usage())
 				} else {
 					cmd.InitDefaultHelpFlag()    // make possible 'help' flag to be shown
