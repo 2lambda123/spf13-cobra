@@ -16,10 +16,11 @@ package cobra
 
 import (
 	"fmt"
-	"github.com/leonelquinteros/gotext"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/leonelquinteros/gotext"
 
 	"github.com/spf13/pflag"
 )
